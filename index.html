@@ -1,12 +1,10 @@
-<!DOCTYPE html>
+ <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
   <title>ICBS 2026 Attendance Scanner</title>
 
-  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <script src="https://unpkg.com/html5-qrcode"></script>
 
   <style>
     body {
@@ -17,251 +15,316 @@
       text-align: center;
     }
 
-    .container {
+    .box {
       max-width: 500px;
       margin: auto;
       background: white;
       padding: 20px;
-      border-radius: 15px;
+      border-radius: 14px;
       box-shadow: 0 3px 12px rgba(0,0,0,0.12);
     }
 
-    h1 {
-      margin-bottom: 5px;
+    h2 {
+      margin-top: 0;
     }
 
-    .subtitle {
-      color: #666;
-      margin-bottom: 20px;
-    }
-
-    label {
-      display: block;
-      text-align: left;
-      font-weight: bold;
-      margin-top: 15px;
-      margin-bottom: 6px;
-    }
-
-    input,
-    select {
+    input, select, button {
       width: 100%;
-      padding: 13px;
+      padding: 14px;
+      margin: 8px 0;
       font-size: 16px;
-      border: 1px solid #ccc;
-      border-radius: 8px;
       box-sizing: border-box;
+      border-radius: 8px;
+    }
+
+    input, select {
+      border: 1px solid #ccc;
+      background: white;
     }
 
     button {
-      width: 100%;
-      margin-top: 15px;
-      padding: 13px;
       border: none;
-      border-radius: 8px;
-      font-size: 16px;
-      cursor: pointer;
-    }
-
-    .main-button {
       background: #111;
       color: white;
+      font-weight: bold;
     }
 
-    .stop-button {
-      background: #ddd;
-      color: #111;
+    button:disabled {
+      background: #aaa;
     }
 
     #reader {
       width: 100%;
-      margin-top: 20px;
+      margin-top: 15px;
+    }
+
+    #cameraSelect {
+      display: none;
     }
 
     #result {
-      margin-top: 20px;
-      padding: 15px;
-      border-radius: 10px;
-      font-size: 16px;
+      margin-top: 15px;
+      padding: 14px;
+      border-radius: 8px;
       font-weight: bold;
-      display: none;
+      min-height: 20px;
     }
 
     .success {
-      background: #e8f5e9;
-      color: #1b5e20;
+      background: #d9f7df;
+      color: #126b2a;
     }
 
     .error {
-      background: #ffebee;
-      color: #b71c1c;
+      background: #ffdede;
+      color: #9b111e;
     }
 
-    .warning {
-      background: #fff8e1;
-      color: #8d6e00;
-    }
-
-    #loginSection {
-      display: block;
-    }
-
-    #scannerSection {
-      display: none;
-    }
-
-    .lock-icon {
-      font-size: 45px;
-      margin-bottom: 10px;
-    }
-
-    .small-text {
-      color: #777;
-      font-size: 14px;
-      margin-top: 10px;
+    .info {
+      background: #e7f0ff;
+      color: #164a9c;
     }
   </style>
 </head>
 
 <body>
 
-<div class="container">
+<div class="box">
 
-  <div id="loginSection">
+  <h2>ICBS 2026</h2>
+  <p><strong>Attendance Scanner</strong></p>
 
-    <div class="lock-icon">🔐</div>
+  <input
+    type="password"
+    id="pin"
+    placeholder="Enter Staff PIN"
+  >
 
-    <h1>ICBS 2026</h1>
+  <select id="day">
+    <option value="">Select Day</option>
+    <option value="Day 1">Day 1</option>
+    <option value="Day 2">Day 2</option>
+    <option value="Day 3">Day 3</option>
+  </select>
 
-    <div class="subtitle">
-      Attendance Scanner
-    </div>
+  <select id="entrance">
+    <option value="">Select Entrance</option>
+    <option value="Entrance 1">Entrance 1</option>
+    <option value="Entrance 2">Entrance 2</option>
+  </select>
 
-    <label for="pin">Staff PIN</label>
+  <button onclick="prepareCamera()">
+    Start Scanner
+  </button>
 
-    <input
-      type="password"
-      id="pin"
-      placeholder="Enter staff PIN"
-      inputmode="numeric"
-      autocomplete="off"
-    >
+  <select id="cameraSelect" onchange="startSelectedCamera()">
+  </select>
 
-    <button
-      class="main-button"
-      onclick="checkPin()">
-      Continue
-    </button>
+  <div id="reader"></div>
 
-    <div class="small-text">
-      Authorized attendance staff only
-    </div>
+  <button
+    id="stopButton"
+    onclick="stopScanner()"
+    style="display:none;"
+  >
+    Stop Scanner
+  </button>
 
-  </div>
-
-
-  <div id="scannerSection">
-
-    <h1>ICBS 2026</h1>
-
-    <div class="subtitle">
-      Attendance Scanner
-    </div>
-
-    <label for="day">Conference Day</label>
-
-    <select id="day">
-      <option value="">Select Day</option>
-      <option value="Day 1">Day 1</option>
-      <option value="Day 2">Day 2</option>
-      <option value="Day 3">Day 3</option>
-    </select>
-
-    <label for="entrance">Entrance</label>
-
-    <select id="entrance">
-      <option value="">Select Entrance</option>
-      <option value="Entrance 1">Entrance 1</option>
-      <option value="Entrance 2">Entrance 2</option>
-    </select>
-
-    <div id="reader"></div>
-
-    <div id="result"></div>
-
-    <button
-      class="main-button"
-      onclick="startScanner()">
-      Start Scanner
-    </button>
-
-    <button
-      class="stop-button"
-      onclick="stopScanner()">
-      Stop Scanner
-    </button>
-
-  </div>
+  <div id="result"></div>
 
 </div>
-
 
 <script>
 
 const STAFF_PIN = "808901";
 
-/*
- * This is your deployed Google Apps Script.
- * It receives the scanned participant ID and records attendance.
- */
 const APPS_SCRIPT_URL =
-  "https://script.google.com/macros/s/AKfycbzRASzTUExQTdYrQmiE7tI0XndhxdGD7V3ioYBz25Eo9Mu9MWB-2A61qvzgoVST8lUF8A/exec";
+"https://script.google.com/macros/s/AKfycbzRASzTUExQTdYrQmiE7tI0XndhxdGD7V3ioYBz25Eo9Mu9MWB-2A61qvzgoVST8lUF8A/exec";
 
-
-let scanner = null;
-let scanning = false;
+let html5QrCode = null;
+let cameras = [];
 let processingScan = false;
-
-
-function checkPin() {
-
-  const enteredPin =
-    document.getElementById("pin").value.trim();
-
-  if (enteredPin === STAFF_PIN) {
-
-    document.getElementById("loginSection").style.display = "none";
-
-    document.getElementById("scannerSection").style.display = "block";
-
-  } else {
-
-    alert("Incorrect staff PIN.");
-
-    document.getElementById("pin").value = "";
-
-  }
-
-}
-
 
 function showResult(message, type) {
 
-  const result =
-    document.getElementById("result");
+  const result = document.getElementById("result");
 
-  result.innerHTML = message;
-
-  result.className = "";
-
-  result.classList.add(type);
-
-  result.style.display = "block";
-
+  result.className = type;
+  result.innerText = message;
 }
 
+async function prepareCamera() {
 
-function startScanner() {
+  const pin = document.getElementById("pin").value;
+  const day = document.getElementById("day").value;
+  const entrance = document.getElementById("entrance").value;
+
+  if (pin !== STAFF_PIN) {
+    showResult("Incorrect staff PIN.", "error");
+    return;
+  }
+
+  if (!day) {
+    showResult("Please select the conference day.", "error");
+    return;
+  }
+
+  if (!entrance) {
+    showResult("Please select the entrance.", "error");
+    return;
+  }
+
+  showResult("Opening camera...", "info");
+
+  try {
+
+    /*
+      First request camera permission directly.
+      This helps iPhone Chrome expose the available cameras.
+    */
+
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: true
+    });
+
+    stream.getTracks().forEach(track => track.stop());
+
+    cameras = await Html5Qrcode.getCameras();
+
+    if (!cameras || cameras.length === 0) {
+      showResult("No camera was detected.", "error");
+      return;
+    }
+
+    const cameraSelect =
+      document.getElementById("cameraSelect");
+
+    cameraSelect.innerHTML = "";
+
+    cameras.forEach((camera, index) => {
+
+      const option = document.createElement("option");
+
+      option.value = camera.id;
+      option.text =
+        camera.label ||
+        "Camera " + (index + 1);
+
+      cameraSelect.appendChild(option);
+
+    });
+
+    cameraSelect.style.display = "block";
+
+    /*
+      Try to automatically select the rear camera.
+    */
+
+    let rearCamera = cameras.find(camera =>
+      /back|rear|environment/i.test(camera.label)
+    );
+
+    if (rearCamera) {
+      cameraSelect.value = rearCamera.id;
+    }
+
+    await startSelectedCamera();
+
+  } catch (error) {
+
+    console.error(error);
+
+    showResult(
+      "Camera could not start. Please check Chrome camera permission.",
+      "error"
+    );
+
+  }
+}
+
+async function startSelectedCamera() {
+
+  const cameraId =
+    document.getElementById("cameraSelect").value;
+
+  if (!cameraId) {
+    return;
+  }
+
+  if (html5QrCode) {
+    try {
+      await html5QrCode.stop();
+    } catch (e) {}
+  }
+
+  html5QrCode = new Html5Qrcode("reader");
+
+  try {
+
+    await html5QrCode.start(
+
+      cameraId,
+
+      {
+        fps: 10,
+
+        qrbox: function(viewfinderWidth, viewfinderHeight) {
+
+          const minEdge =
+            Math.min(viewfinderWidth, viewfinderHeight);
+
+          const size =
+            Math.floor(minEdge * 0.70);
+
+          return {
+            width: size,
+            height: size
+          };
+
+        }
+
+      },
+
+      onScanSuccess,
+
+      onScanFailure
+
+    );
+
+    document.getElementById("stopButton").style.display =
+      "block";
+
+    showResult(
+      "Scanner ready. Scan the participant QR code.",
+      "success"
+    );
+
+  } catch (error) {
+
+    console.error(error);
+
+    showResult(
+      "Unable to start the selected camera.",
+      "error"
+    );
+
+  }
+}
+
+function onScanFailure(error) {
+  // Ignore normal QR scanning misses.
+}
+
+function onScanSuccess(decodedText) {
+
+  if (processingScan) {
+    return;
+  }
+
+  processingScan = true;
+
+  const participantId =
+    decodedText.trim();
 
   const day =
     document.getElementById("day").value;
@@ -269,186 +332,62 @@ function startScanner() {
   const entrance =
     document.getElementById("entrance").value;
 
-
-  if (!day) {
-
-    alert("Please select the conference day.");
-
-    return;
-  }
-
-
-  if (!entrance) {
-
-    alert("Please select the entrance.");
-
-    return;
-  }
-
-
-  if (scanning) {
-    return;
-  }
-
-
-  scanner =
-    new Html5Qrcode("reader");
-
-
-  scanner.start(
-
-    { facingMode: "environment" },
-
-    {
-      fps: 10,
-      qrbox: {
-        width: 250,
-        height: 250
-      }
-    },
-
-
-    function(decodedText) {
-
-      if (processingScan) {
-        return;
-      }
-
-      processingScan = true;
-
-      processScan(
-        decodedText,
-        day,
-        entrance
-      );
-
-    },
-
-
-    function(errorMessage) {
-
-      // Normal QR scanning messages are ignored.
-
-    }
-
-  )
-
-  .then(function() {
-
-    scanning = true;
-
-    showResult(
-      "📷 Scanner ready. Scan the participant's QR code.",
-      "warning"
-    );
-
-  })
-
-
-  .catch(function(error) {
-
-    showResult(
-      "Unable to start camera. Please allow camera access.",
-      "error"
-    );
-
-    console.error(error);
-
-  });
-
-}
-
-
-function stopScanner() {
-
-  if (scanner && scanning) {
-
-    scanner.stop()
-
-    .then(function() {
-
-      scanning = false;
-
-      processingScan = false;
-
-      showResult(
-        "Scanner stopped.",
-        "warning"
-      );
-
-    })
-
-    .catch(function(error) {
-
-      console.error(error);
-
-    });
-
-  }
-
-}
-
-
-function processScan(
-  participantId,
-  day,
-  entrance
-) {
-
-  if (!participantId) {
-
-    processingScan = false;
-
-    return;
-  }
-
-
-  if (scanner && scanning) {
-
-    scanner.pause(true);
-
-  }
-
-
   showResult(
-    "⏳ Checking participant...",
-    "warning"
+    "Checking " + participantId + "...",
+    "info"
   );
 
-
-  /*
-   * Send the scan to Google Apps Script.
-   */
   const callbackName =
     "icbsCallback_" +
     Date.now();
 
+  window[callbackName] = function(response) {
 
-  window[callbackName] =
-    function(response) {
+    try {
 
-      try {
+      if (response.status === "SUCCESS") {
 
-        handleAttendanceResponse(
-          response,
-          day,
-          entrance
+        showResult(
+          "✓ ATTENDANCE RECORDED\n" +
+          response.message,
+          "success"
         );
 
-      } finally {
+      } else if (response.status === "DUPLICATE") {
 
-        delete window[callbackName];
+        showResult(
+          "⚠ ALREADY RECORDED\n" +
+          response.message,
+          "error"
+        );
+
+      } else {
+
+        showResult(
+          "✕ ERROR\n" +
+          response.message,
+          "error"
+        );
 
       }
 
-    };
+    } catch (error) {
 
+      showResult(
+        "Unable to process the scan.",
+        "error"
+      );
 
-  const script =
-    document.createElement("script");
+    }
 
+    setTimeout(() => {
+      processingScan = false;
+    }, 2000);
 
-  script.src =
+    delete window[callbackName];
+  };
+
+  const url =
     APPS_SCRIPT_URL +
     "?action=scan" +
     "&participantId=" +
@@ -460,105 +399,52 @@ function processScan(
     "&callback=" +
     callbackName;
 
+  const script =
+    document.createElement("script");
 
-  script.onerror =
-    function() {
+  script.src = url;
 
-      showResult(
-        "❌ Unable to connect to attendance system.",
-        "error"
-      );
+  script.onerror = function() {
 
-      processingScan = false;
+    showResult(
+      "Connection error. Please try again.",
+      "error"
+    );
 
-      if (scanner && scanning) {
+    processingScan = false;
 
-        scanner.resume();
+    delete window[callbackName];
 
-      }
-
-    };
-
+  };
 
   document.body.appendChild(script);
 
 }
 
+async function stopScanner() {
 
-function handleAttendanceResponse(
-  response,
-  day,
-  entrance
-) {
+  if (html5QrCode) {
 
-  if (response.status === "SUCCESS") {
-
-    showResult(
-
-      "✅ ATTENDANCE RECORDED<br><br>" +
-
-      "<strong>" +
-      response.name +
-      "</strong><br>" +
-
-      response.participantId +
-      "<br>" +
-
-      day +
-      " | " +
-      entrance,
-
-      "success"
-    );
-
-  }
-
-  else if (response.status === "DUPLICATE") {
-
-    showResult(
-
-      "⚠️ ALREADY RECORDED<br><br>" +
-
-      "<strong>" +
-      response.name +
-      "</strong><br>" +
-
-      response.participantId +
-      "<br>" +
-
-      day,
-
-      "warning"
-    );
-
-  }
-
-  else {
-
-    showResult(
-
-      "❌ SCAN REJECTED<br><br>" +
-
-      response.message,
-
-      "error"
-    );
-
-  }
-
-
-  setTimeout(function() {
-
-    processingScan = false;
-
-    if (scanner && scanning) {
-
-      scanner.resume();
-
+    try {
+      await html5QrCode.stop();
+      html5QrCode.clear();
+    } catch (error) {
+      console.log(error);
     }
 
-  }, 2500);
+    html5QrCode = null;
+  }
 
+  document.getElementById("stopButton").style.display =
+    "none";
+
+  document.getElementById("cameraSelect").style.display =
+    "none";
+
+  showResult(
+    "Scanner stopped.",
+    "info"
+  );
 }
 
 </script>
