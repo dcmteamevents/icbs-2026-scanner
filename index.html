@@ -1,10 +1,11 @@
- <!DOCTYPE html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ICBS 2026 Attendance Scanner</title>
 
-  <script src="https://unpkg.com/html5-qrcode"></script>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 
   <style>
     body {
@@ -21,36 +22,34 @@
       background: white;
       padding: 20px;
       border-radius: 14px;
-      box-shadow: 0 3px 12px rgba(0,0,0,0.12);
+      box-shadow: 0 3px 15px rgba(0,0,0,0.12);
     }
 
-    h2 {
+    h1 {
       margin-top: 0;
+      font-size: 24px;
     }
 
     input, select, button {
       width: 100%;
-      padding: 14px;
+      padding: 13px;
       margin: 8px 0;
-      font-size: 16px;
       box-sizing: border-box;
       border-radius: 8px;
-    }
-
-    input, select {
       border: 1px solid #ccc;
-      background: white;
+      font-size: 16px;
     }
 
     button {
-      border: none;
       background: #111;
       color: white;
+      border: none;
+      cursor: pointer;
       font-weight: bold;
     }
 
     button:disabled {
-      background: #aaa;
+      background: #999;
     }
 
     #reader {
@@ -58,31 +57,28 @@
       margin-top: 15px;
     }
 
-    #cameraSelect {
-      display: none;
-    }
-
-    #result {
+    #status {
       margin-top: 15px;
-      padding: 14px;
+      padding: 12px;
       border-radius: 8px;
+      background: #eee;
       font-weight: bold;
       min-height: 20px;
     }
 
     .success {
-      background: #d9f7df;
-      color: #126b2a;
+      background: #d9f7df !important;
+      color: #146c2e;
     }
 
     .error {
-      background: #ffdede;
-      color: #9b111e;
+      background: #ffdede !important;
+      color: #9b0000;
     }
 
     .info {
-      background: #e7f0ff;
-      color: #164a9c;
+      background: #e4efff !important;
+      color: #174a91;
     }
   </style>
 </head>
@@ -91,46 +87,42 @@
 
 <div class="box">
 
-  <h2>ICBS 2026</h2>
-  <p><strong>Attendance Scanner</strong></p>
+  <h1>ICBS 2026 Attendance Scanner</h1>
 
   <input
     type="password"
     id="pin"
-    placeholder="Enter Staff PIN"
+    placeholder="Staff PIN"
   >
 
   <select id="day">
-    <option value="">Select Day</option>
     <option value="Day 1">Day 1</option>
     <option value="Day 2">Day 2</option>
     <option value="Day 3">Day 3</option>
   </select>
 
   <select id="entrance">
-    <option value="">Select Entrance</option>
     <option value="Entrance 1">Entrance 1</option>
     <option value="Entrance 2">Entrance 2</option>
   </select>
 
-  <button onclick="prepareCamera()">
+  <select id="cameraSelect">
+    <option value="">Select camera</option>
+  </select>
+
+  <button id="startBtn" onclick="startScanner()">
     Start Scanner
   </button>
 
-  <select id="cameraSelect" onchange="startSelectedCamera()">
-  </select>
-
-  <div id="reader"></div>
-
-  <button
-    id="stopButton"
-    onclick="stopScanner()"
-    style="display:none;"
-  >
+  <button id="stopBtn" onclick="stopScanner()" disabled>
     Stop Scanner
   </button>
 
-  <div id="result"></div>
+  <div id="reader"></div>
+
+  <div id="status">
+    Scanner ready.
+  </div>
 
 </div>
 
@@ -141,179 +133,235 @@ const STAFF_PIN = "808901";
 const APPS_SCRIPT_URL =
 "https://script.google.com/macros/s/AKfycbzRASzTUExQTdYrQmiE7tI0XndhxdGD7V3ioYBz25Eo9Mu9MWB-2A61qvzgoVST8lUF8A/exec";
 
-let html5QrCode = null;
-let cameras = [];
+let scanner = null;
 let processingScan = false;
+let currentCameraId = null;
 
-function showResult(message, type) {
 
-  const result = document.getElementById("result");
+/* --------------------------------
+   STATUS
+-------------------------------- */
 
-  result.className = type;
-  result.innerText = message;
+function setStatus(message, type = "") {
+
+  const box = document.getElementById("status");
+
+  box.textContent = message;
+
+  box.className = "";
+
+  if (type) {
+    box.classList.add(type);
+  }
 }
 
-async function prepareCamera() {
 
-  const pin = document.getElementById("pin").value;
-  const day = document.getElementById("day").value;
-  const entrance = document.getElementById("entrance").value;
+/* --------------------------------
+   LOAD CAMERAS
+-------------------------------- */
 
-  if (pin !== STAFF_PIN) {
-    showResult("Incorrect staff PIN.", "error");
-    return;
-  }
-
-  if (!day) {
-    showResult("Please select the conference day.", "error");
-    return;
-  }
-
-  if (!entrance) {
-    showResult("Please select the entrance.", "error");
-    return;
-  }
-
-  showResult("Opening camera...", "info");
+async function loadCameras() {
 
   try {
 
-    /*
-      First request camera permission directly.
-      This helps iPhone Chrome expose the available cameras.
-    */
+    const devices =
+      await Html5Qrcode.getCameras();
 
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: true
-    });
+    const select =
+      document.getElementById("cameraSelect");
 
-    stream.getTracks().forEach(track => track.stop());
+    select.innerHTML =
+      '<option value="">Select camera</option>';
 
-    cameras = await Html5Qrcode.getCameras();
+    if (!devices || devices.length === 0) {
 
-    if (!cameras || cameras.length === 0) {
-      showResult("No camera was detected.", "error");
+      setStatus(
+        "No camera found.",
+        "error"
+      );
+
       return;
     }
 
-    const cameraSelect =
-      document.getElementById("cameraSelect");
+    let preferredCamera = devices[0];
 
-    cameraSelect.innerHTML = "";
+    for (const camera of devices) {
 
-    cameras.forEach((camera, index) => {
+      const label =
+        (camera.label || "").toLowerCase();
 
-      const option = document.createElement("option");
+      if (
+        label.includes("back") ||
+        label.includes("rear") ||
+        label.includes("environment")
+      ) {
+
+        preferredCamera = camera;
+        break;
+      }
+    }
+
+    devices.forEach(camera => {
+
+      const option =
+        document.createElement("option");
 
       option.value = camera.id;
-      option.text =
-        camera.label ||
-        "Camera " + (index + 1);
 
-      cameraSelect.appendChild(option);
+      option.textContent =
+        camera.label ||
+        "Camera " + camera.id;
+
+      select.appendChild(option);
 
     });
 
-    cameraSelect.style.display = "block";
+    select.value = preferredCamera.id;
 
-    /*
-      Try to automatically select the rear camera.
-    */
+    currentCameraId =
+      preferredCamera.id;
 
-    let rearCamera = cameras.find(camera =>
-      /back|rear|environment/i.test(camera.label)
+    setStatus(
+      "Camera ready. Select your day and entrance, then start scanning.",
+      "info"
     );
-
-    if (rearCamera) {
-      cameraSelect.value = rearCamera.id;
-    }
-
-    await startSelectedCamera();
 
   } catch (error) {
 
     console.error(error);
 
-    showResult(
-      "Camera could not start. Please check Chrome camera permission.",
+    setStatus(
+      "Unable to access camera.",
       "error"
     );
 
   }
 }
 
-async function startSelectedCamera() {
 
-  const cameraId =
-    document.getElementById("cameraSelect").value;
+/* --------------------------------
+   START SCANNER
+-------------------------------- */
 
-  if (!cameraId) {
+async function startScanner() {
+
+  const pin =
+    document.getElementById("pin").value.trim();
+
+  if (pin !== STAFF_PIN) {
+
+    setStatus(
+      "Incorrect staff PIN.",
+      "error"
+    );
+
     return;
   }
 
-  if (html5QrCode) {
-    try {
-      await html5QrCode.stop();
-    } catch (e) {}
+  const cameraSelect =
+    document.getElementById("cameraSelect");
+
+  currentCameraId =
+    cameraSelect.value;
+
+  if (!currentCameraId) {
+
+    setStatus(
+      "Please select a camera.",
+      "error"
+    );
+
+    return;
   }
 
-  html5QrCode = new Html5Qrcode("reader");
+  if (scanner) {
+
+    await stopScanner();
+
+  }
+
+  scanner =
+    new Html5Qrcode("reader");
 
   try {
 
-    await html5QrCode.start(
+    await scanner.start(
 
-      cameraId,
+      currentCameraId,
 
       {
         fps: 10,
-
-        qrbox: function(viewfinderWidth, viewfinderHeight) {
-
-          const minEdge =
-            Math.min(viewfinderWidth, viewfinderHeight);
-
-          const size =
-            Math.floor(minEdge * 0.70);
-
-          return {
-            width: size,
-            height: size
-          };
-
+        qrbox: {
+          width: 250,
+          height: 250
         }
-
       },
 
       onScanSuccess,
 
-      onScanFailure
+      () => {}
 
     );
 
-    document.getElementById("stopButton").style.display =
-      "block";
+    document.getElementById("startBtn").disabled =
+      true;
 
-    showResult(
-      "Scanner ready. Scan the participant QR code.",
-      "success"
+    document.getElementById("stopBtn").disabled =
+      false;
+
+    setStatus(
+      "Scanner ready to scan participant code.",
+      "info"
     );
 
   } catch (error) {
 
     console.error(error);
 
-    showResult(
-      "Unable to start the selected camera.",
+    setStatus(
+      "Unable to start camera.",
       "error"
     );
 
   }
 }
 
-function onScanFailure(error) {
-  // Ignore normal QR scanning misses.
+
+/* --------------------------------
+   STOP SCANNER
+-------------------------------- */
+
+async function stopScanner() {
+
+  try {
+
+    if (scanner) {
+
+      await scanner.stop();
+
+      await scanner.clear();
+
+      scanner = null;
+
+    }
+
+  } catch (error) {
+
+    console.error(error);
+
+  }
+
+  document.getElementById("startBtn").disabled =
+    false;
+
+  document.getElementById("stopBtn").disabled =
+    true;
 }
+
+
+/* --------------------------------
+   QR SCANNED
+-------------------------------- */
 
 function onScanSuccess(decodedText) {
 
@@ -321,10 +369,20 @@ function onScanSuccess(decodedText) {
     return;
   }
 
-  processingScan = true;
-
   const participantId =
     decodedText.trim();
+
+  if (!/^ICBS26-\d{4}$/.test(participantId)) {
+
+    setStatus(
+      "Invalid participant QR code.",
+      "error"
+    );
+
+    return;
+  }
+
+  processingScan = true;
 
   const day =
     document.getElementById("day").value;
@@ -332,120 +390,173 @@ function onScanSuccess(decodedText) {
   const entrance =
     document.getElementById("entrance").value;
 
-  showResult(
+  setStatus(
     "Checking " + participantId + "...",
     "info"
   );
 
-  const callbackName =
-    "icbsCallback_" +
-    Date.now();
+  sendAttendance(
+    participantId,
+    day,
+    entrance
+  );
+}
 
-  window[callbackName] = function(response) {
 
-    try {
+/* --------------------------------
+   SEND ATTENDANCE
+-------------------------------- */
 
-      if (response.status === "SUCCESS") {
+function sendAttendance(
+  participantId,
+  day,
+  entrance
+) {
 
-        showResult(
-          "✓ ATTENDANCE RECORDED\n" +
-          response.message,
-          "success"
-        );
+  const params = new URLSearchParams();
 
-      } else if (response.status === "DUPLICATE") {
+  params.append(
+    "action",
+    "scan"
+  );
 
-        showResult(
-          "⚠ ALREADY RECORDED\n" +
-          response.message,
-          "error"
-        );
+  params.append(
+    "participantId",
+    participantId
+  );
 
-      } else {
+  params.append(
+    "day",
+    day
+  );
 
-        showResult(
-          "✕ ERROR\n" +
-          response.message,
-          "error"
-        );
+  params.append(
+    "entrance",
+    entrance
+  );
 
-      }
+  /*
+   * Use a hidden image request.
+   *
+   * This avoids the browser's
+   * cross-origin/CORS restriction.
+   *
+   * The Apps Script endpoint will
+   * still process the attendance.
+   */
 
-    } catch (error) {
-
-      showResult(
-        "Unable to process the scan.",
-        "error"
-      );
-
-    }
-
-    setTimeout(() => {
-      processingScan = false;
-    }, 2000);
-
-    delete window[callbackName];
-  };
-
-  const url =
+  const requestUrl =
     APPS_SCRIPT_URL +
-    "?action=scan" +
-    "&participantId=" +
-    encodeURIComponent(participantId) +
-    "&day=" +
-    encodeURIComponent(day) +
-    "&entrance=" +
-    encodeURIComponent(entrance) +
-    "&callback=" +
-    callbackName;
+    "?" +
+    params.toString();
 
-  const script =
-    document.createElement("script");
+  const request =
+    new Image();
 
-  script.src = url;
+  let completed = false;
 
-  script.onerror = function() {
+  request.onload = function() {
 
-    showResult(
-      "Connection error. Please try again.",
-      "error"
+    completed = true;
+
+    setStatus(
+      "Attendance request sent for " +
+      participantId,
+      "success"
     );
 
     processingScan = false;
 
-    delete window[callbackName];
+    setTimeout(() => {
 
+      setStatus(
+        "Scanner ready to scan participant code.",
+        "info"
+      );
+
+    }, 2500);
   };
 
-  document.body.appendChild(script);
+
+  request.onerror = function() {
+
+    completed = true;
+
+    /*
+     * Image requests may report an error
+     * even when Google Apps Script has
+     * received and processed the request.
+     */
+
+    setStatus(
+      "Attendance request sent for " +
+      participantId,
+      "success"
+    );
+
+    processingScan = false;
+
+    setTimeout(() => {
+
+      setStatus(
+        "Scanner ready to scan participant code.",
+        "info"
+      );
+
+    }, 2500);
+  };
+
+
+  request.src = requestUrl;
 
 }
 
-async function stopScanner() {
 
-  if (html5QrCode) {
+/* --------------------------------
+   CAMERA PERMISSION
+-------------------------------- */
 
-    try {
-      await html5QrCode.stop();
-      html5QrCode.clear();
-    } catch (error) {
-      console.log(error);
-    }
+async function initializeCamera() {
 
-    html5QrCode = null;
+  try {
+
+    /*
+     * Request camera permission first.
+     */
+
+    const stream =
+      await navigator.mediaDevices.getUserMedia({
+        video: true
+      });
+
+    stream
+      .getTracks()
+      .forEach(track => track.stop());
+
+    await loadCameras();
+
+  } catch (error) {
+
+    console.error(error);
+
+    setStatus(
+      "Please allow camera access.",
+      "error"
+    );
+
   }
 
-  document.getElementById("stopButton").style.display =
-    "none";
-
-  document.getElementById("cameraSelect").style.display =
-    "none";
-
-  showResult(
-    "Scanner stopped.",
-    "info"
-  );
 }
+
+
+/* --------------------------------
+   INITIALIZE
+-------------------------------- */
+
+window.addEventListener(
+  "load",
+  initializeCamera
+);
 
 </script>
 
