@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>ICBS 2026 Attendance Scanner</title>
+
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f6f8;
+      margin: 0;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .container {
+      max-width: 500px;
+      margin: auto;
+      background: white;
+      padding: 20px;
+      border-radius: 15px;
+      box-shadow: 0 3px 12px rgba(0,0,0,0.12);
+    }
+
+    h1 {
+      margin-bottom: 5px;
+    }
+
+    .subtitle {
+      color: #666;
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      text-align: left;
+      font-weight: bold;
+      margin-top: 15px;
+      margin-bottom: 6px;
+    }
+
+    input,
+    select {
+      width: 100%;
+      padding: 13px;
+      font-size: 16px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      box-sizing: border-box;
+    }
+
+    button {
+      width: 100%;
+      margin-top: 15px;
+      padding: 13px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    .main-button {
+      background: #111;
+      color: white;
+    }
+
+    .stop-button {
+      background: #ddd;
+      color: #111;
+    }
+
+    #reader {
+      width: 100%;
+      margin-top: 20px;
+    }
+
+    #result {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: bold;
+      display: none;
+    }
+
+    .success {
+      background: #e8f5e9;
+      color: #1b5e20;
+    }
+
+    .error {
+      background: #ffebee;
+      color: #b71c1c;
+    }
+
+    .warning {
+      background: #fff8e1;
+      color: #8d6e00;
+    }
+
+    #loginSection {
+      display: block;
+    }
+
+    #scannerSection {
+      display: none;
+    }
+
+    .lock-icon {
+      font-size: 45px;
+      margin-bottom: 10px;
+    }
+
+    .small-text {
+      color: #777;
+      font-size: 14px;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <div id="loginSection">
+
+    <div class="lock-icon">🔐</div>
+
+    <h1>ICBS 2026</h1>
+
+    <div class="subtitle">
+      Attendance Scanner
+    </div>
+
+    <label for="pin">Staff PIN</label>
+
+    <input
+      type="password"
+      id="pin"
+      placeholder="Enter staff PIN"
+      inputmode="numeric"
+      autocomplete="off"
+    >
+
+    <button
+      class="main-button"
+      onclick="checkPin()">
+      Continue
+    </button>
+
+    <div class="small-text">
+      Authorized attendance staff only
+    </div>
+
+  </div>
+
+
+  <div id="scannerSection">
+
+    <h1>ICBS 2026</h1>
+
+    <div class="subtitle">
+      Attendance Scanner
+    </div>
+
+    <label for="day">Conference Day</label>
+
+    <select id="day">
+      <option value="">Select Day</option>
+      <option value="Day 1">Day 1</option>
+      <option value="Day 2">Day 2</option>
+      <option value="Day 3">Day 3</option>
+    </select>
+
+    <label for="entrance">Entrance</label>
+
+    <select id="entrance">
+      <option value="">Select Entrance</option>
+      <option value="Entrance 1">Entrance 1</option>
+      <option value="Entrance 2">Entrance 2</option>
+    </select>
+
+    <div id="reader"></div>
+
+    <div id="result"></div>
+
+    <button
+      class="main-button"
+      onclick="startScanner()">
+      Start Scanner
+    </button>
+
+    <button
+      class="stop-button"
+      onclick="stopScanner()">
+      Stop Scanner
+    </button>
+
+  </div>
+
+</div>
+
+
+<script>
+
+const STAFF_PIN = "808901";
+
+/*
+ * This is your deployed Google Apps Script.
+ * It receives the scanned participant ID and records attendance.
+ */
+const APPS_SCRIPT_URL =
+  "https://script.google.com/macros/s/AKfycbzRASzTUExQTdYrQmiE7tI0XndhxdGD7V3ioYBz25Eo9Mu9MWB-2A61qvzgoVST8lUF8A/exec";
+
+
+let scanner = null;
+let scanning = false;
+let processingScan = false;
+
+
+function checkPin() {
+
+  const enteredPin =
+    document.getElementById("pin").value.trim();
+
+  if (enteredPin === STAFF_PIN) {
+
+    document.getElementById("loginSection").style.display = "none";
+
+    document.getElementById("scannerSection").style.display = "block";
+
+  } else {
+
+    alert("Incorrect staff PIN.");
+
+    document.getElementById("pin").value = "";
+
+  }
+
+}
+
+
+function showResult(message, type) {
+
+  const result =
+    document.getElementById("result");
+
+  result.innerHTML = message;
+
+  result.className = "";
+
+  result.classList.add(type);
+
+  result.style.display = "block";
+
+}
+
+
+function startScanner() {
+
+  const day =
+    document.getElementById("day").value;
+
+  const entrance =
+    document.getElementById("entrance").value;
+
+
+  if (!day) {
+
+    alert("Please select the conference day.");
+
+    return;
+  }
+
+
+  if (!entrance) {
+
+    alert("Please select the entrance.");
+
+    return;
+  }
+
+
+  if (scanning) {
+    return;
+  }
+
+
+  scanner =
+    new Html5Qrcode("reader");
+
+
+  scanner.start(
+
+    { facingMode: "environment" },
+
+    {
+      fps: 10,
+      qrbox: {
+        width: 250,
+        height: 250
+      }
+    },
+
+
+    function(decodedText) {
+
+      if (processingScan) {
+        return;
+      }
+
+      processingScan = true;
+
+      processScan(
+        decodedText,
+        day,
+        entrance
+      );
+
+    },
+
+
+    function(errorMessage) {
+
+      // Normal QR scanning messages are ignored.
+
+    }
+
+  )
+
+  .then(function() {
+
+    scanning = true;
+
+    showResult(
+      "📷 Scanner ready. Scan the participant's QR code.",
+      "warning"
+    );
+
+  })
+
+
+  .catch(function(error) {
+
+    showResult(
+      "Unable to start camera. Please allow camera access.",
+      "error"
+    );
+
+    console.error(error);
+
+  });
+
+}
+
+
+function stopScanner() {
+
+  if (scanner && scanning) {
+
+    scanner.stop()
+
+    .then(function() {
+
+      scanning = false;
+
+      processingScan = false;
+
+      showResult(
+        "Scanner stopped.",
+        "warning"
+      );
+
+    })
+
+    .catch(function(error) {
+
+      console.error(error);
+
+    });
+
+  }
+
+}
+
+
+function processScan(
+  participantId,
+  day,
+  entrance
+) {
+
+  if (!participantId) {
+
+    processingScan = false;
+
+    return;
+  }
+
+
+  if (scanner && scanning) {
+
+    scanner.pause(true);
+
+  }
+
+
+  showResult(
+    "⏳ Checking participant...",
+    "warning"
+  );
+
+
+  /*
+   * Send the scan to Google Apps Script.
+   */
+  const callbackName =
+    "icbsCallback_" +
+    Date.now();
+
+
+  window[callbackName] =
+    function(response) {
+
+      try {
+
+        handleAttendanceResponse(
+          response,
+          day,
+          entrance
+        );
+
+      } finally {
+
+        delete window[callbackName];
+
+      }
+
+    };
+
+
+  const script =
+    document.createElement("script");
+
+
+  script.src =
+    APPS_SCRIPT_URL +
+    "?action=scan" +
+    "&participantId=" +
+    encodeURIComponent(participantId) +
+    "&day=" +
+    encodeURIComponent(day) +
+    "&entrance=" +
+    encodeURIComponent(entrance) +
+    "&callback=" +
+    callbackName;
+
+
+  script.onerror =
+    function() {
+
+      showResult(
+        "❌ Unable to connect to attendance system.",
+        "error"
+      );
+
+      processingScan = false;
+
+      if (scanner && scanning) {
+
+        scanner.resume();
+
+      }
+
+    };
+
+
+  document.body.appendChild(script);
+
+}
+
+
+function handleAttendanceResponse(
+  response,
+  day,
+  entrance
+) {
+
+  if (response.status === "SUCCESS") {
+
+    showResult(
+
+      "✅ ATTENDANCE RECORDED<br><br>" +
+
+      "<strong>" +
+      response.name +
+      "</strong><br>" +
+
+      response.participantId +
+      "<br>" +
+
+      day +
+      " | " +
+      entrance,
+
+      "success"
+    );
+
+  }
+
+  else if (response.status === "DUPLICATE") {
+
+    showResult(
+
+      "⚠️ ALREADY RECORDED<br><br>" +
+
+      "<strong>" +
+      response.name +
+      "</strong><br>" +
+
+      response.participantId +
+      "<br>" +
+
+      day,
+
+      "warning"
+    );
+
+  }
+
+  else {
+
+    showResult(
+
+      "❌ SCAN REJECTED<br><br>" +
+
+      response.message,
+
+      "error"
+    );
+
+  }
+
+
+  setTimeout(function() {
+
+    processingScan = false;
+
+    if (scanner && scanning) {
+
+      scanner.resume();
+
+    }
+
+  }, 2500);
+
+}
+
+</script>
+
+</body>
+</html>
