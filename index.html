@@ -1,101 +1,32 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ICBS 2026 Attendance Scanner</title>
-
-  <script src="https://unpkg.com/html5-qrcode"></script>
-
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f4f6f8;
-      margin: 0;
-      padding: 20px;
-      text-align: center;
-    }
-
-    .container {
-      max-width: 500px;
-      margin: auto;
-      background: white;
-      padding: 20px;
-      border-radius: 15px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-    }
-
-    h1 {
-      margin-bottom: 5px;
-    }
-
-    .subtitle {
-      color: #666;
-      margin-bottom: 20px;
-    }
-
-    input, select, button {
-      width: 100%;
-      padding: 13px;
-      margin: 7px 0;
-      font-size: 16px;
-      box-sizing: border-box;
-      border-radius: 8px;
-      border: 1px solid #ccc;
-    }
-
-    button {
-      background: #111;
-      color: white;
-      border: none;
-      cursor: pointer;
-    }
-
-    button:disabled {
-      background: #aaa;
-    }
-
-    #reader {
-      width: 100%;
-      margin-top: 15px;
-    }
-
-    #status {
-      margin-top: 15px;
-      padding: 15px;
-      border-radius: 8px;
-      font-weight: bold;
-    }
-
-    .success {
-      background: #d9f7df;
-      color: #146c2e;
-    }
-
-    .error {
-      background: #ffe0e0;
-      color: #a00000;
-    }
-
-    .info {
-      background: #e5efff;
-      color: #174a8b;
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ICBS 2026 Attendance Scanner</title>
+<script src="https://unpkg.com/html5-qrcode"></script>
+<style>
+  body { font-family: Arial, sans-serif; background: #f4f6f8; margin: 0; padding: 20px; text-align: center; }
+  .container { max-width: 500px; margin: auto; background: #fff; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,.1); }
+  h1 { margin: 0 0 5px; }
+  .subtitle { color: #666; margin-bottom: 20px; }
+  input, select, button { width: 100%; padding: 13px; margin: 7px 0; font-size: 16px; box-sizing: border-box; border-radius: 8px; border: 1px solid #ccc; }
+  button { background: #111; color: #fff; border: none; cursor: pointer; }
+  button:disabled { background: #aaa; }
+  #reader { width: 100%; margin-top: 15px; }
+  #status { margin-top: 15px; padding: 15px; border-radius: 8px; font-weight: bold; }
+  .success { background: #d9f7df; color: #146c2e; }
+  .error { background: #ffe0e0; color: #a00000; }
+  .warning { background: #fff8e1; color: #8d6e00; }
+  .info { background: #e5efff; color: #174a8b; }
+</style>
 </head>
-
 <body>
-
 <div class="container">
-
   <h1>ICBS 2026</h1>
   <div class="subtitle">Attendance Scanner</div>
 
-  <input
-    type="password"
-    id="pin"
-    placeholder="Enter Staff PIN"
-  >
+  <input type="password" id="pin" placeholder="Enter Staff PIN" inputmode="numeric" autocomplete="off">
 
   <select id="day">
     <option value="">Select Day</option>
@@ -110,538 +41,163 @@
     <option value="Entrance 2">Entrance 2</option>
   </select>
 
-  <select id="cameraSelect">
-    <option value="">Select Camera</option>
-  </select>
+  <select id="cameraSelect"><option value="">Select Camera</option></select>
 
-  <button id="startBtn" onclick="startScanner()">
-    Start Scanner
-  </button>
-
-  <button id="stopBtn" onclick="stopScanner()" disabled>
-    Stop Scanner
-  </button>
+  <button id="startBtn" onclick="startScanner()">Start Scanner</button>
+  <button id="stopBtn" onclick="stopScanner()" disabled>Stop Scanner</button>
 
   <div id="reader"></div>
-
-  <div id="status" class="info">
-    Select your day and entrance, then start the scanner.
-  </div>
-
+  <div id="status" class="info">Enter the PIN, select day and entrance, then start the scanner.</div>
 </div>
 
 <script>
-
-const STAFF_PIN = "808901";
-
-const APPS_SCRIPT_URL =
-"https://script.google.com/macros/s/AKfycbzRASzTUExQTdYrQmiE7tI0XndhxdGD7V3ioYBz25Eo9Mu9MWB-2A61qvzgoVST8lUF8A/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzRASzTUExQTdYrQmiE7tI0XndhxdGD7V3ioYBz25Eo9Mu9MWB-2A61qvzgoVST8lUF8A/exec";
+const COOLDOWN_MS = 2500;
 
 let html5QrCode = null;
 let processingScan = false;
-let currentCameraId = null;
-
-
-/* =========================
-   STATUS
-========================= */
 
 function setStatus(message, type) {
-  const status = document.getElementById("status");
-
-  status.textContent = message;
-
-  status.className = "";
-
-  if (type === "success") {
-    status.classList.add("success");
-  } else if (type === "error") {
-    status.classList.add("error");
-  } else {
-    status.classList.add("info");
-  }
+  const el = document.getElementById("status");
+  el.textContent = message;
+  el.className = type || "info";
 }
-
-
-/* =========================
-   LOAD CAMERAS
-========================= */
 
 async function loadCameras() {
-
   try {
-
-    const tempStream =
-      await navigator.mediaDevices.getUserMedia({
-        video: true
-      });
-
-    tempStream.getTracks().forEach(track => track.stop());
-
-    const cameras =
-      await Html5Qrcode.getCameras();
-
-    const cameraSelect =
-      document.getElementById("cameraSelect");
-
-    cameraSelect.innerHTML =
-      '<option value="">Select Camera</option>';
-
-    if (!cameras || cameras.length === 0) {
-
-      setStatus(
-        "No camera found.",
-        "error"
-      );
-
-      return;
-    }
-
-    let preferredCamera = cameras[0];
-
-    const rearCamera =
-      cameras.find(camera =>
-        /back|rear|environment/i.test(
-          camera.label
-        )
-      );
-
-    if (rearCamera) {
-      preferredCamera = rearCamera;
-    }
-
-    cameras.forEach(camera => {
-
-      const option =
-        document.createElement("option");
-
-      option.value = camera.id;
-
-      option.textContent =
-        camera.label ||
-        "Camera " + camera.id;
-
-      cameraSelect.appendChild(option);
-
+    const tmp = await navigator.mediaDevices.getUserMedia({ video: true });
+    tmp.getTracks().forEach(t => t.stop());
+    const cameras = await Html5Qrcode.getCameras();
+    const select = document.getElementById("cameraSelect");
+    select.innerHTML = '<option value="">Select Camera</option>';
+    if (!cameras || cameras.length === 0) { setStatus("No camera found.", "error"); return; }
+    const rear = cameras.find(c => /back|rear|environment/i.test(c.label)) || cameras[0];
+    cameras.forEach(c => {
+      const o = document.createElement("option");
+      o.value = c.id;
+      o.textContent = c.label || "Camera " + c.id;
+      select.appendChild(o);
     });
-
-    cameraSelect.value =
-      preferredCamera.id;
-
-    currentCameraId =
-      preferredCamera.id;
-
-    setStatus(
-      "Camera ready. Select your options and start scanning.",
-      "info"
-    );
-
-  } catch (error) {
-
-    console.error(error);
-
-    setStatus(
-      "Unable to access camera. Please allow camera access.",
-      "error"
-    );
+    select.value = rear.id;
+    setStatus("Camera ready. Enter the PIN and start scanning.", "info");
+  } catch (err) {
+    console.error(err);
+    setStatus("Unable to access camera. Please allow camera access.", "error");
   }
 }
-
-
-/* =========================
-   START SCANNER
-========================= */
 
 async function startScanner() {
+  const pin = document.getElementById("pin").value.trim();
+  const day = document.getElementById("day").value;
+  const entrance = document.getElementById("entrance").value;
+  const cameraId = document.getElementById("cameraSelect").value;
 
-  const pin =
-    document.getElementById("pin").value.trim();
+  if (!pin) return setStatus("Please enter the staff PIN.", "error");
+  if (!day) return setStatus("Please select the conference day.", "error");
+  if (!entrance) return setStatus("Please select the entrance.", "error");
+  if (!cameraId) return setStatus("Please select a camera.", "error");
 
-  const day =
-    document.getElementById("day").value;
-
-  const entrance =
-    document.getElementById("entrance").value;
-
-  const cameraId =
-    document.getElementById("cameraSelect").value;
-
-
-  if (pin !== STAFF_PIN) {
-
-    setStatus(
-      "Incorrect staff PIN.",
-      "error"
-    );
-
-    return;
-  }
-
-
-  if (!day) {
-
-    setStatus(
-      "Please select the conference day.",
-      "error"
-    );
-
-    return;
-  }
-
-
-  if (!entrance) {
-
-    setStatus(
-      "Please select the entrance.",
-      "error"
-    );
-
-    return;
-  }
-
-
-  if (!cameraId) {
-
-    setStatus(
-      "Please select a camera.",
-      "error"
-    );
-
-    return;
-  }
-
-
-  if (html5QrCode) {
-    try {
-      await html5QrCode.stop();
-    } catch (e) {}
-  }
-
-
-  html5QrCode =
-    new Html5Qrcode("reader");
-
+  if (html5QrCode) { try { await html5QrCode.stop(); } catch (e) {} }
+  html5QrCode = new Html5Qrcode("reader");
 
   try {
-
     await html5QrCode.start(
-
       cameraId,
-
-      {
-        fps: 10,
-        qrbox: {
-          width: 250,
-          height: 250
-        }
-      },
-
+      { fps: 10, qrbox: { width: 250, height: 250 } },
       onScanSuccess,
-
-      onScanFailure
-
+      function () {}
     );
-
-
-    document.getElementById(
-      "startBtn"
-    ).disabled = true;
-
-    document.getElementById(
-      "stopBtn"
-    ).disabled = false;
-
-    setStatus(
-      "Scanner active. Scan the participant QR code.",
-      "info"
-    );
-
-  } catch (error) {
-
-    console.error(error);
-
-    setStatus(
-      "Unable to start camera. Please try again.",
-      "error"
-    );
+    document.getElementById("startBtn").disabled = true;
+    document.getElementById("stopBtn").disabled = false;
+    setStatus("Scanner active. Scan the participant QR code.", "info");
+  } catch (err) {
+    console.error(err);
+    setStatus("Unable to start camera. Please try again.", "error");
   }
 }
-
-
-/* =========================
-   STOP SCANNER
-========================= */
 
 async function stopScanner() {
-
-  if (!html5QrCode) {
-    return;
-  }
-
-  try {
-
-    await html5QrCode.stop();
-
-    html5QrCode.clear();
-
-  } catch (error) {
-
-    console.error(error);
-
-  }
-
-
-  document.getElementById(
-    "startBtn"
-  ).disabled = false;
-
-  document.getElementById(
-    "stopBtn"
-  ).disabled = true;
-
-
-  setStatus(
-    "Scanner stopped.",
-    "info"
-  );
-
+  if (!html5QrCode) return;
+  try { await html5QrCode.stop(); html5QrCode.clear(); } catch (err) { console.error(err); }
+  document.getElementById("startBtn").disabled = false;
+  document.getElementById("stopBtn").disabled = true;
+  setStatus("Scanner stopped.", "info");
 }
-
-
-/* =========================
-   QR SCAN
-========================= */
 
 function onScanSuccess(decodedText) {
-
-  if (processingScan) {
-    return;
-  }
-
-  const participantId =
-    decodedText.trim();
-
+  if (processingScan) return;
+  const participantId = decodedText.trim();
 
   if (!/^ICBS26-\d{4}$/.test(participantId)) {
-
-    setStatus(
-      "Invalid ICBS participant QR code.",
-      "error"
-    );
-
+    processingScan = true;
+    setStatus("Invalid ICBS participant QR code.", "error");
+    setTimeout(() => { processingScan = false; }, COOLDOWN_MS);
     return;
   }
 
-
   processingScan = true;
-
-
-  const day =
-    document.getElementById("day").value;
-
-  const entrance =
-    document.getElementById("entrance").value;
-
-
-  setStatus(
-    "QR detected: " + participantId +
-    ". Recording attendance...",
-    "info"
-  );
-
-
+  setStatus("QR detected: " + participantId + ". Recording attendance...", "info");
   sendAttendance(
     participantId,
-    day,
-    entrance
+    document.getElementById("day").value,
+    document.getElementById("entrance").value,
+    document.getElementById("pin").value.trim()
   );
 }
 
+// JSONP request to Apps Script
+function sendAttendance(participantId, day, entrance, pin) {
+  const callbackName = "icbsCallback_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
+  const script = document.createElement("script");
+  let finished = false;
 
-/* =========================
-   QR FAILURE
-========================= */
-
-function onScanFailure(error) {
-  // Normal QR scanning attempts.
-}
-
-
-/* =========================
-   SEND ATTENDANCE
-   JSONP
-========================= */
-
-function sendAttendance(
-  participantId,
-  day,
-  entrance
-) {
-
-  const callbackName =
-    "icbsCallback_" +
-    Date.now() +
-    "_" +
-    Math.floor(
-      Math.random() * 10000
-    );
-
-
-  const script =
-    document.createElement("script");
-
-
-  function cleanup() {
-
-    if (script.parentNode) {
-      script.parentNode.removeChild(script);
-    }
-
-    try {
-      delete window[callbackName];
-    } catch (e) {}
-
+  function finish() {
+    if (finished) return;
+    finished = true;
+    clearTimeout(timer);
+    if (script.parentNode) script.parentNode.removeChild(script);
+    try { delete window[callbackName]; } catch (e) {}
+    // Cooldown stops the same QR code from being re-read straight away
+    setTimeout(() => { processingScan = false; }, COOLDOWN_MS);
   }
 
+  const timer = setTimeout(function () {
+    setStatus("No response from the system. Check your connection and scan again.", "error");
+    finish();
+  }, 20000);
 
-  window[callbackName] =
-    function(result) {
-
-      try {
-
-        if (!result) {
-
-          setStatus(
-            "No response received from attendance system.",
-            "error"
-          );
-
-        } else if (
-          result.status === "SUCCESS"
-        ) {
-
-          setStatus(
-            result.message ||
-            "Attendance recorded successfully.",
-            "success"
-          );
-
-        } else if (
-          result.status === "DUPLICATE"
-        ) {
-
-          setStatus(
-            result.message ||
-            "This participant has already been recorded for this day.",
-            "error"
-          );
-
-        } else {
-
-          setStatus(
-            result.message ||
-            "Attendance could not be recorded.",
-            "error"
-          );
-
-        }
-
-      } catch (error) {
-
-        console.error(error);
-
-        setStatus(
-          "Error processing attendance response.",
-          "error"
-        );
-
-      } finally {
-
-        processingScan = false;
-
-        cleanup();
-
-      }
-
-    };
-
-
-  script.onerror = function() {
-
-    setStatus(
-      "Connection error. Please check your internet connection and try again.",
-      "error"
-    );
-
-    processingScan = false;
-
-    cleanup();
-
+  window[callbackName] = function (result) {
+    if (!result) {
+      setStatus("No response received from attendance system.", "error");
+    } else if (result.status === "SUCCESS") {
+      setStatus("✅ " + (result.message || "Attendance recorded."), "success");
+      if (navigator.vibrate) navigator.vibrate(150);
+    } else if (result.status === "DUPLICATE") {
+      setStatus("⚠️ " + (result.message || "Already recorded for this day."), "warning");
+    } else {
+      setStatus("❌ " + (result.message || "Attendance could not be recorded."), "error");
+    }
+    finish();
   };
 
+  script.onerror = function () {
+    setStatus("Connection error. Check your internet and scan again.", "error");
+    finish();
+  };
 
-  const params =
-    new URLSearchParams({
-
-      action: "scan",
-
-      participantId:
-        participantId,
-
-      day:
-        day,
-
-      entrance:
-        entrance,
-
-      callback:
-        callbackName
-
-    });
-
-
-  script.src =
-    APPS_SCRIPT_URL +
-    "?" +
-    params.toString();
-
-
+  const params = new URLSearchParams({
+    action: "scan",
+    pin: pin,
+    participantId: participantId,
+    day: day,
+    entrance: entrance,
+    callback: callbackName
+  });
+  script.src = APPS_SCRIPT_URL + "?" + params.toString();
   document.body.appendChild(script);
-
 }
 
-
-/* =========================
-   CAMERA SELECTION
-========================= */
-
-document
-  .getElementById("cameraSelect")
-  .addEventListener(
-    "change",
-    function() {
-
-      currentCameraId =
-        this.value;
-
-    }
-  );
-
-
-/* =========================
-   INITIALIZE
-========================= */
-
-window.addEventListener(
-  "load",
-  function() {
-
-    loadCameras();
-
-  }
-);
-
+window.addEventListener("load", loadCameras);
 </script>
-
 </body>
 </html>
